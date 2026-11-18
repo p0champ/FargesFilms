@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
-import { createPanel, PANEL_W, PANEL_H } from './panel.js';
+import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
 const ROOMS = { bullpen: buildBullpen };
@@ -10,6 +10,7 @@ const roomKey = ROOMS[params.get('room')] ? params.get('room') : 'bullpen';
 const statusEl = document.getElementById('status');
 const enterBtn = document.getElementById('enter');
 const lightsBtn = document.getElementById('lights');
+const retryBtn = document.getElementById('retry');
 const say = (t) => { statusEl.textContent = t; };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -25,35 +26,62 @@ renderer.xr.setFoveation(0);
 document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const room = ROOMS[roomKey](renderer, () => { window.__loaded = true; });
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 60);
+camera.rotation.order = 'YXZ';
+
+// ----- the room, with loading and failure states -----
+let roomReady = false;
+let xrSupported = false;
+let reveal = 0;
+const room = ROOMS[roomKey](renderer, {
+  onProgress: (f) => { if (!roomReady) say(`Loading the room… ${Math.round(f * 100)}%`); },
+  onReady: () => { roomReady = true; refreshStartPage(); },
+  onError: () => {
+    say('The room could not be loaded. Check your connection and try again.');
+    retryBtn.hidden = false;
+    enterBtn.hidden = true;
+  },
+});
+retryBtn.addEventListener('click', () => location.reload());
 scene.add(room.root);
 scene.background = room.background;
 document.getElementById('room-name').textContent = room.name;
-
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 60);
 camera.position.copy(room.seatedEye);
-camera.rotation.order = 'YXZ';
-camera.layers.enable(1); // flat preview shows the left-eye image
+say('Loading the room… 0%');
 
-// ----- preview on a flat screen: drag to look around -----
+function refreshStartPage() {
+  if (!roomReady) return;
+  if (xrSupported) {
+    enterBtn.hidden = false;
+    enterBtn.disabled = false;
+    say('');
+  } else {
+    say('Open this page on a Meta Quest to step inside. Drag to look around.');
+  }
+}
+
+// ----- preview on a flat screen: drag or use the arrow keys to look around -----
 let yaw = Number(params.get('yaw')) || 0;
 let pitch = Number(params.get('pitch')) || 0;
-let dragging = false, lastX = 0, lastY = 0;
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
 const el = renderer.domElement;
-el.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; el.setPointerCapture(e.pointerId); });
 const _ndc = new THREE.Vector2(), _mouseRay = new THREE.Raycaster();
 function mouseRay(e) {
   _ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   _mouseRay.setFromCamera(_ndc, camera);
   return _mouseRay.ray;
 }
-let moved = 0;
-el.addEventListener('pointerup', (e) => { dragging = false; if (moved < 6 && !renderer.xr.isPresenting) panel.clickRay(mouseRay(e)); moved = 0; });
+el.addEventListener('pointerdown', (e) => { dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY; el.setPointerCapture(e.pointerId); el.style.cursor = 'grabbing'; });
+el.addEventListener('pointerup', (e) => {
+  dragging = false;
+  el.style.cursor = 'grab';
+  if (moved < 6 && !renderer.xr.isPresenting) panel.clickRay(mouseRay(e));
+});
 el.addEventListener('pointermove', (e) => {
   if (!dragging) { if (!renderer.xr.isPresenting) panel.hoverRay(mouseRay(e)); return; }
   moved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
-  yaw += (e.clientX - lastX) * 0.004;
-  pitch = Math.max(-1.3, Math.min(1.3, pitch + (e.clientY - lastY) * 0.004));
+  yaw -= (e.clientX - lastX) * 0.004;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch - (e.clientY - lastY) * 0.004));
   lastX = e.clientX; lastY = e.clientY;
 });
 window.addEventListener('resize', () => {
@@ -65,224 +93,263 @@ window.addEventListener('resize', () => {
 
 // ----- lights -----
 let lightTarget = params.get('lights') === 'off' ? 0 : 1;
-if (lightTarget === 0) room.setLightLevel(0);
-function syncLightsButton() { lightsBtn.textContent = lightTarget > 0.5 ? 'Lights down' : 'Lights up'; }
-function toggleLights() {
-  lightTarget = lightTarget > 0.5 ? 0 : 1;
+function syncLightsButton() { lightsBtn.textContent = lightTarget > 0.5 ? 'Dim the lights' : 'Raise the lights'; }
+function setLights(v) {
+  lightTarget = Math.max(0, Math.min(1, v));
   syncLightsButton();
-  panel.redraw();
 }
-lightsBtn.addEventListener('click', toggleLights);
-window.addEventListener('keydown', (e) => { if (e.key === 'l' || e.key === 'L') toggleLights(); });
+syncLightsButton();
+lightsBtn.addEventListener('click', () => { setLights(lightTarget > 0.5 ? 0 : 1); panel.redraw(); });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'l' || e.key === 'L') { setLights(lightTarget > 0.5 ? 0 : 1); panel.redraw(); }
+  if (e.key === 'ArrowLeft') yaw += 0.12;
+  if (e.key === 'ArrowRight') yaw -= 0.12;
+  if (e.key === 'ArrowUp') pitch = Math.min(1.3, pitch + 0.1);
+  if (e.key === 'ArrowDown') pitch = Math.max(-1.3, pitch - 0.1);
+});
 
-// Streaming services open in an ordinary browser window, which the Quest
-// lets you float inside the room. Each tile shows the service's own mark.
+// ----- streaming services -----
+// They open in an ordinary browser window, which the Quest lets you float
+// inside the room. `ink` is the logo colour, `fill` the tile behind it.
 const SERVICES = [
-  ['Netflix', 'https://www.netflix.com/', '#141414'],
-  ['Disney+', 'https://www.disneyplus.com/', '#ffffff'],
-  ['Prime Video', 'https://www.primevideo.com/', '#1a98ff'],
-  ['YouTube', 'https://www.youtube.com/', '#ff0000'],
-  ['HBO Max', 'https://www.hbomax.com/', '#000000'],
-  ['Hulu', 'https://www.hulu.com/', '#1ce783'],
-  ['Apple TV+', 'https://tv.apple.com/', '#1c1c1e'],
-  ['Paramount+', 'https://www.paramountplus.com/', '#0a64ff'],
-  ['Twitch', 'https://www.twitch.tv/', '#9146ff'],
-  ['Plex', 'https://app.plex.tv/', '#282a2d'],
+  { name: 'Netflix', url: 'https://www.netflix.com/', fill: '#000000', ink: '#e50914' },
+  { name: 'Disney+', url: 'https://www.disneyplus.com/', fill: '#ffffff', image: './assets/logo_disneyplus.png' },
+  { name: 'Prime Video', url: 'https://www.primevideo.com/', fill: '#1a98ff', ink: '#ffffff' },
+  { name: 'YouTube', url: 'https://www.youtube.com/', fill: '#ffffff', ink: '#ff0000' },
+  { name: 'HBO Max', url: 'https://www.hbomax.com/', fill: '#000000', image: './assets/logo_hbomax.png' },
+  { name: 'Hulu', url: 'https://www.hulu.com/', fill: '#1ce783', ink: '#0b0c0f' },
+  { name: 'Apple TV', url: 'https://tv.apple.com/', fill: '#1c1c1e', ink: '#ffffff', logo: 'Apple TV+' },
+  { name: 'Paramount+', url: 'https://www.paramountplus.com/', fill: '#0064ff', ink: '#ffffff' },
+  { name: 'Twitch', url: 'https://www.twitch.tv/', fill: '#9146ff', ink: '#ffffff' },
+  { name: 'Plex', url: 'https://app.plex.tv/', fill: '#1f2326', ink: '#ebaf00' },
 ];
-let note = '';
-const LOGO_INK = { Netflix: '#e50914', Plex: '#ebaf00', Hulu: '#0b0c0f' };
-// Logos supplied as images (the rest are vector paths in logos.js).
-const LOGO_IMAGES = {};
-Object.entries({ 'Disney+': './assets/logo_disneyplus.png', 'HBO Max': './assets/logo_hbomax.png' }).forEach(([name, src]) => {
-  const img = new Image();
-  img.onload = () => { LOGO_IMAGES[name] = img; panel.redraw(); };
-  img.src = src;
-});
 const logoPaths = {};
-function logoPath(name) { return logoPaths[name] || (logoPaths[name] = new Path2D(LOGOS[name].path)); }
-function openService(name) {
-  const entry = SERVICES.find((s) => s[0] === name);
-  const win = window.open(entry[1], '_blank');
-  note = win ? `${name} opened in a browser window. Drag it where you like.` : `Press the Meta button and open ${name} in the Browser.`;
-}
-document.querySelectorAll('[data-service]').forEach((b) => b.addEventListener('click', () => openService(b.dataset.service)));
-
-// The rooms on offer. More are added here as they are built.
-const ROOM_CARDS = [
-  { key: 'bullpen', title: 'The Office', subtitle: 'The bullpen', thumb: './assets/bullpen_thumb.jpg' },
-];
-const thumbs = {};
-ROOM_CARDS.forEach((r) => {
+const images = {};
+function loadImage(key, src) {
   const img = new Image();
-  img.onload = () => { thumbs[r.key] = img; panel.redraw(); };
-  img.src = r.thumb;
+  img.onload = () => { images[key] = img; panel.redraw(); };
+  img.src = src;
+}
+SERVICES.forEach((s) => {
+  const path = LOGOS[s.logo || s.name];
+  if (path) logoPaths[s.name] = new Path2D(path.path);
+  if (s.image) loadImage(s.name, s.image);
 });
+loadImage('room:bullpen', './assets/bullpen_thumb.jpg');
 
-// In the headset: a floating panel with three tabs and a dock.
-const LIGHT_STEPS = 7;
-let tab = params.get('tab') || 'streaming';
+function openService(service) {
+  const win = window.open(service.url, '_blank');
+  if (win) {
+    try { win.opener = null; } catch { /* cross-origin windows may refuse; harmless */ }
+    panel.toast(`${service.name} is open. Drag its window where you like.`, 3);
+    setTimeout(() => { if (renderer.xr.isPresenting) panel.setVisible(false); }, 1800);
+  } else {
+    panel.toast(`Press the Meta button and open ${service.name} in the Browser.`, 6);
+  }
+}
+
+// ----- the headset panel -----
+const TABS = [['rooms', 'Rooms'], ['streaming', 'Streaming'], ['settings', 'Settings']];
+let tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'streaming';
 const panel = createPanel(renderer, scene);
+
+// Layout, on an 8-pixel grid.
+const L = {
+  pad: 64, cardRadius: 64, bodyX: 60, bodyH: 648,
+  dockH: 112, dockGap: 24, dockPad: 16, tabW: 230, tabGap: 14, hideW: 150,
+  title: 48, body: 34, small: 30,
+  ink: '#f2efe8', dimInk: 'rgba(242,239,232,0.7)',
+};
+
 panel.setPainter((ui) => {
   const { g } = ui;
   const W = PANEL_W, H = PANEL_H;
-  // Dock.
-  const dockW = 1040, dockH = 110, dx = (W - dockW) / 2, dy = H - dockH - 10;
-  ui.card(dx, dy, dockW, dockH, dockH / 2);
-  const tabs = [['rooms', 'Rooms'], ['streaming', 'Streaming'], ['settings', 'Settings']];
-  let x = dx + 16;
-  tabs.forEach(([key, label]) => {
-    ui.button(x, dy + 16, 230, dockH - 32, label, () => { tab = key; note = ''; }, { selected: tab === key });
-    x += 244;
-  });
-  ui.button(x + 20, dy + 16, 130, dockH - 32, 'Hide', () => panel.setVisible(false));
-  ui.button(x + 164, dy + 16, 130, dockH - 32, 'Exit', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
 
-  // Body.
-  const bx = 60, by = 20, bw = W - 120, bh = dy - 50;
-  ui.card(bx, by, bw, bh, 56);
+  // Dock.
+  const dockW = L.dockPad * 2 + TABS.length * L.tabW + TABS.length * L.tabGap + L.hideW;
+  const dx = (W - dockW) / 2, dy = H - L.dockGap - L.dockH;
+  ui.card(dx, dy, dockW, L.dockH, L.dockH / 2);
+  let x = dx + L.dockPad;
+  const bh2 = L.dockH - L.dockPad * 2;
+  TABS.forEach(([key, label]) => {
+    ui.button(x, dy + L.dockPad, L.tabW, bh2, label, () => { tab = key; }, { selected: tab === key });
+    x += L.tabW + L.tabGap;
+  });
+  ui.button(x, dy + L.dockPad, L.hideW, bh2, 'Hide', () => panel.setVisible(false));
+
+  // Body card, sitting just above the dock.
+  const bx = L.bodyX, bw = W - 2 * L.bodyX, bh = L.bodyH, by = dy - L.dockGap - bh;
+  ui.card(bx, by, bw, bh, L.cardRadius);
+  const cx = bx + L.pad, cw = bw - 2 * L.pad;
+  const titleY = by + L.pad + L.title / 2;
+  const top = by + L.pad + L.title + 40;   // where the tab's content starts
+  const title = TABS.find(([k]) => k === tab)[1];
+  ui.text(title, cx, titleY, L.title, L.ink, 700, 'left');
+
   if (tab === 'streaming') {
-    ui.text('Streaming', bx + 60, by + 70, 46, '#f2efe8', '600', 'left');
-    ui.text(note || 'Opens in a browser window you can place and resize.', bx + bw - 60, by + 72, 28, 'rgba(242,239,232,0.6)', '400', 'right');
-    const cols = 5, tw = 230, th = 270, gx = (bw - 120 - cols * tw) / (cols - 1);
-    SERVICES.forEach(([name, , color], i) => {
-      const tx = bx + 60 + (i % cols) * (tw + gx), ty = by + 140 + Math.floor(i / cols) * (th + 24);
-      ui.region(tx, ty, tw, th, (hot) => {
-        g.fillStyle = hot ? 'rgba(242,239,232,0.16)' : 'rgba(242,239,232,0.05)';
-        ui.roundRect(tx, ty, tw, th, 36);
-        g.fill();
-        g.fillStyle = color;
-        g.beginPath();
-        g.arc(tx + tw / 2, ty + 108, 78, 0, Math.PI * 2);
-        g.fill();
-        const logo = LOGOS[name];
-        const pic = LOGO_IMAGES[name];
-        if (pic) {
-          const fit = Math.min(108 / pic.width, 108 / pic.height);
-          const pw = pic.width * fit, ph = pic.height * fit;
-          g.drawImage(pic, tx + tw / 2 - pw / 2, ty + 108 - ph / 2, pw, ph);
-        } else if (logo) {
-          const k = 86 / 24;
-          g.save();
-          g.translate(tx + tw / 2 - 43, ty + 108 - 43);
-          g.scale(k, k);
-          g.fillStyle = LOGO_INK[name] || '#ffffff';
-          g.fill(logoPath(name));
-          g.restore();
-        } else {
-          ui.text(name, tx + tw / 2, ty + 110, name.length > 4 ? 34 : 48, '#ffffff', '700');
-        }
-        ui.text(name, tx + tw / 2, ty + 228, 32, '#f2efe8', '600');
-      }, () => openService(name));
+    ui.text('Opens in a window you can place and resize', cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
+    const cols = 5, tw = 236, th = 150, gapX = (cw - cols * tw) / (cols - 1), rowH = th + 16 + 34 + 30;
+    SERVICES.forEach((s, i) => {
+      const tx = cx + (i % cols) * (tw + gapX), ty = top + Math.floor(i / cols) * rowH;
+      g.fillStyle = s.fill;
+      ui.roundRect(tx, ty, tw, th, 28);
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.14)';
+      g.lineWidth = 2;
+      ui.roundRect(tx + 1, ty + 1, tw - 2, th - 2, 28);
+      g.stroke();
+      const pic = images[s.name], path = logoPaths[s.name];
+      if (pic) {
+        const fit = Math.min((tw * 0.62) / pic.width, (th * 0.62) / pic.height);
+        g.drawImage(pic, tx + tw / 2 - pic.width * fit / 2, ty + th / 2 - pic.height * fit / 2, pic.width * fit, pic.height * fit);
+      } else if (path) {
+        const size = 108, k = size / 24;
+        g.save();
+        g.translate(tx + tw / 2 - size / 2, ty + th / 2 - size / 2);
+        g.scale(k, k);
+        g.fillStyle = s.ink;
+        g.fill(path);
+        g.restore();
+      } else {
+        ui.text(s.name, tx + tw / 2, ty + th / 2, 36, s.ink || '#ffffff', 700);
+      }
+      ui.text(s.name, tx + tw / 2, ty + th + 16 + 17, L.small, L.ink, 500);
+      ui.region(tx, ty, tw, th, 28, () => openService(s));
     });
   } else if (tab === 'rooms') {
-    ui.text('Rooms', bx + 60, by + 70, 46, '#f2efe8', '600', 'left');
-    const tw = 420, th = 560;
-    for (let i = 0; i < 3; i++) {
-      const card = ROOM_CARDS[i];
-      const tx = bx + 60 + i * (tw + 30), ty = by + 140;
-      if (!card) {
-        g.strokeStyle = 'rgba(242,239,232,0.18)';
-        g.lineWidth = 3;
-        g.setLineDash([14, 12]);
-        ui.roundRect(tx, ty, tw, th, 40);
-        g.stroke();
-        g.setLineDash([]);
-        ui.text('Coming next', tx + tw / 2, ty + th / 2, 32, 'rgba(242,239,232,0.45)');
-        continue;
-      }
-      ui.region(tx, ty, tw, th, (hot) => {
-        g.fillStyle = hot ? 'rgba(242,239,232,0.2)' : 'rgba(242,239,232,0.08)';
-        ui.roundRect(tx, ty, tw, th, 40);
-        g.fill();
-        g.save();
-        ui.roundRect(tx + 16, ty + 16, tw - 32, tw - 32, 28);
-        g.clip();
-        if (thumbs[card.key]) g.drawImage(thumbs[card.key], tx + 16, ty + 16, tw - 32, tw - 32);
-        else { g.fillStyle = '#22252b'; g.fillRect(tx + 16, ty + 16, tw - 32, tw - 32); }
-        g.restore();
-        ui.text(card.title, tx + 28, ty + tw + 36, 40, '#f2efe8', '600', 'left');
-        ui.text(card.key === roomKey ? `${card.subtitle} · you are here` : card.subtitle, tx + 28, ty + tw + 90, 28, 'rgba(242,239,232,0.6)', '400', 'left');
-      }, () => { if (card.key !== roomKey) location.search = `?room=${card.key}`; });
+    // Only rooms that exist are listed.
+    const tw = 560, th = 315, ty = top;
+    const pic = images[`room:${room.key}`];
+    g.save();
+    ui.roundRect(cx, ty, tw, th, 28);
+    g.clip();
+    if (pic) {
+      const k = Math.max(tw / pic.width, th / pic.height);
+      g.drawImage(pic, cx + tw / 2 - pic.width * k / 2, ty + th / 2 - pic.height * k / 2, pic.width * k, pic.height * k);
+    } else {
+      g.fillStyle = '#2a2c31';
+      g.fillRect(cx, ty, tw, th);
     }
+    g.restore();
+    g.strokeStyle = '#f2efe8';
+    g.lineWidth = 4;
+    ui.roundRect(cx + 2, ty + 2, tw - 4, th - 4, 28);
+    g.stroke();
+    ui.text(room.name, cx, ty + th + 44, 40, L.ink, 700, 'left');
+    ui.text(`${room.subtitle}  ·  Current room`, cx, ty + th + 92, L.small, L.dimInk, 400, 'left');
+    ui.text('More rooms will appear here as they are built.', cx + tw + 56, ty + th / 2, L.small, L.dimInk, 400, 'left');
   } else {
-    ui.text('Settings', bx + 60, by + 70, 46, '#f2efe8', '600', 'left');
-    ui.text(room.name, bx + bw - 60, by + 72, 28, 'rgba(242,239,232,0.6)', '400', 'right');
-    ui.card(bx + 60, by + 150, bw - 120, 230, 40, 'rgba(242,239,232,0.06)');
-    ui.text('Lighting', bx + 100, by + 205, 36, '#f2efe8', '600', 'left');
-    ui.text('Dark', bx + 100, by + 300, 26, 'rgba(242,239,232,0.55)', '400', 'left');
-    ui.text('Bright', bx + bw - 100, by + 300, 26, 'rgba(242,239,232,0.55)', '400', 'right');
-    const sx0 = bx + 220, sx1 = bx + bw - 240, sy = by + 300;
-    const current = Math.round(lightTarget * (LIGHT_STEPS - 1));
-    for (let i = 0; i < LIGHT_STEPS; i++) {
-      const cx = sx0 + (sx1 - sx0) * i / (LIGHT_STEPS - 1);
-      ui.region(cx - 60, sy - 50, 120, 100, (hot) => {
-        g.fillStyle = i === current ? '#5aa2ff' : (hot ? '#f2efe8' : 'rgba(242,239,232,0.35)');
+    ui.text(room.name, cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
+    // Lighting: a real slider. Click anywhere on the track, or hold and drag.
+    const rowH = 150;
+    ui.inset(cx, top, cw, rowH, 32);
+    ui.text('Lighting', cx + 36, top + rowH / 2 + 2, L.body, L.ink, 600, 'left');
+    const sx0 = cx + 300, sx1 = cx + cw - 110, sy = top + rowH / 2;
+    const sun = (px, rad, rays) => {
+      g.fillStyle = L.dimInk;
+      g.beginPath(); g.arc(px, sy, rad, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = L.dimInk; g.lineWidth = 4; g.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
         g.beginPath();
-        g.arc(cx, sy, i === current ? 26 : (hot ? 18 : 10), 0, Math.PI * 2);
-        g.fill();
-      }, () => { lightTarget = i / (LIGHT_STEPS - 1); syncLightsButton(); });
-    }
-    ui.text('Squeeze the grip button to hide or show this panel.', bx + 100, by + 450, 28, 'rgba(242,239,232,0.6)', '400', 'left');
-    ui.text('The film window belongs to the Quest: grab its bar to move it, its corner to resize it.', bx + 100, by + 500, 28, 'rgba(242,239,232,0.6)', '400', 'left');
+        g.moveTo(px + Math.cos(a) * (rad + 7), sy + Math.sin(a) * (rad + 7));
+        g.lineTo(px + Math.cos(a) * (rad + 7 + rays), sy + Math.sin(a) * (rad + 7 + rays));
+        g.stroke();
+      }
+    };
+    sun(sx0 - 52, 8, 4);
+    sun(sx1 + 56, 13, 9);
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    ui.roundRect(sx0, sy - 6, sx1 - sx0, 12, 6);
+    g.fill();
+    const kx = sx0 + (sx1 - sx0) * lightTarget;
+    g.fillStyle = '#f2efe8';
+    ui.roundRect(sx0, sy - 6, Math.max(12, kx - sx0), 12, 6);
+    g.fill();
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 12; g.shadowOffsetY = 3;
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(kx, sy, 22, 0, Math.PI * 2); g.fill();
+    g.restore();
+    const slide = (px) => setLights((px - sx0) / (sx1 - sx0));
+    ui.region(sx0 - 30, sy - 44, sx1 - sx0 + 60, 88, 44, slide, slide);
+
+    // Tips.
+    const tipY = top + rowH + 20, tipH = 150;
+    ui.inset(cx, tipY, cw, tipH, 32);
+    ui.text('Squeeze the grip to hide or show these controls.', cx + 36, tipY + 48, L.small, L.dimInk, 400, 'left');
+    ui.text('Film windows are Quest windows: drag the bar to move, a corner to resize.', cx + 36, tipY + 102, L.small, L.dimInk, 400, 'left');
+
+    ui.button(cx, tipY + tipH + 20, 330, 88, 'Leave the room', () => { const s = renderer.xr.getSession(); if (s) s.end(); });
   }
 });
-if (params.get('panel')) panel.setVisible(true); // preview the headset panel on a flat screen
-const _head = new THREE.Vector3();
+// The panel is drawn on a canvas, which never repaints by itself when a web
+// font arrives, so repaint once the typeface is ready.
+if (document.fonts && document.fonts.load) {
+  Promise.all([document.fonts.load(`600 34px ${FONT}`), document.fonts.load(`400 30px ${FONT}`), document.fonts.load(`700 48px ${FONT}`)])
+    .then(() => panel.redraw()).catch(() => {});
+}
+// Preview the headset panel on a flat screen with ?panel=1.
+if (params.get('panel')) {
+  camera.rotation.set(pitch, yaw, 0);
+  camera.updateMatrixWorld(true);
+  panel.setVisible(true, camera);
+}
 
 // ----- entering VR -----
 async function setupXR() {
-  if (!navigator.xr) { say('Open this page in the Quest Browser to step inside. You can drag to look around here.'); return; }
-  let ok = false;
-  try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch { /* treated as unsupported */ }
-  if (!ok) { say('This device cannot enter VR. You can drag to look around here.'); return; }
-  enterBtn.hidden = false;
-  say('Ready.');
-  enterBtn.addEventListener('click', async () => {
-    try {
-      const session = await navigator.xr.requestSession('immersive-vr', {
-        requiredFeatures: ['local-floor'],
-        optionalFeatures: ['hand-tracking'],
-      });
-      session.addEventListener('end', () => {
-        say('Ready.');
-        panel.setVisible(false);
-        camera.position.copy(room.seatedEye);
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-      await renderer.xr.setSession(session);
-      panel.setVisible(true);
-      say('In VR.');
-    } catch (err) {
-      say(`Could not enter VR: ${err.message}`);
-    }
-  });
+  if (navigator.xr) {
+    try { xrSupported = await navigator.xr.isSessionSupported('immersive-vr'); } catch { xrSupported = false; }
+  }
+  refreshStartPage();
 }
+enterBtn.addEventListener('click', async () => {
+  if (enterBtn.disabled) return;
+  enterBtn.disabled = true;
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['hand-tracking'],
+    });
+    session.addEventListener('end', () => {
+      panel.setVisible(false);
+      enterBtn.disabled = false;
+      say('You left the room. Enter again whenever you like.');
+      camera.position.copy(room.seatedEye);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    // When a system menu or window takes focus, put the pointer rays away.
+    session.addEventListener('visibilitychange', () => panel.setRaysEnabled(session.visibilityState === 'visible'));
+    await renderer.xr.setSession(session);
+    say('');
+    reveal = 0; // fade the room up from black
+    setTimeout(() => panel.setVisible(true), 700);
+  } catch (err) {
+    console.error(err);
+    enterBtn.disabled = false;
+    say('Couldn’t enter the room. Try again.');
+  }
+});
 setupXR();
 
 // ----- frame loop -----
 let last = performance.now();
-let clockTimer = 0;
 renderer.setAnimationLoop((now) => {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (!renderer.xr.isPresenting) camera.rotation.set(-pitch, -yaw, 0);
+  const presenting = renderer.xr.isPresenting;
+  if (!presenting) camera.rotation.set(pitch, yaw, 0);
 
+  // Ease the lights and the fade-in.
   const level = room.getLightLevel();
-  if (Math.abs(level - lightTarget) > 0.001) {
-    const step = dt / 1.6;
-    room.setLightLevel(level < lightTarget ? Math.min(lightTarget, level + step) : Math.max(lightTarget, level - step));
-  }
+  if (Math.abs(level - lightTarget) > 0.002) room.setLightLevel(level + (lightTarget - level) * (1 - Math.exp(-dt * 5)));
+  else if (level !== lightTarget) room.setLightLevel(lightTarget);
+  if (roomReady && reveal < 1) { reveal = Math.min(1, reveal + dt / 0.6); room.setReveal(reveal); }
+  panel.setDim(0.6 + 0.4 * Math.min(1, level / 0.3));
 
-  clockTimer += dt;
-  if (clockTimer > 5) { clockTimer = 0; room.update(); }
-  // A surround image has no position: keep it centred on the viewer's head.
-  if (room.surround) {
-    if (renderer.xr.isPresenting) room.root.position.copy(renderer.xr.getCamera().getWorldPosition(_head));
-    else room.root.position.copy(camera.position);
-  }
-  panel.update(renderer.xr.isPresenting);
+  panel.update(dt, presenting);
   renderer.render(scene, camera);
 });
 
