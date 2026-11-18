@@ -79,10 +79,10 @@ window.addEventListener('keydown', (e) => { if (e.key === 'l' || e.key === 'L') 
 // lets you float inside the room. Each tile shows the service's own mark.
 const SERVICES = [
   ['Netflix', 'https://www.netflix.com/', '#141414'],
-  ['Disney+', 'https://www.disneyplus.com/', '#0e3fa5'],
+  ['Disney+', 'https://www.disneyplus.com/', '#ffffff'],
   ['Prime Video', 'https://www.primevideo.com/', '#1a98ff'],
   ['YouTube', 'https://www.youtube.com/', '#ff0000'],
-  ['Max', 'https://www.max.com/', '#002be7'],
+  ['HBO Max', 'https://www.hbomax.com/', '#000000'],
   ['Hulu', 'https://www.hulu.com/', '#1ce783'],
   ['Apple TV+', 'https://tv.apple.com/', '#1c1c1e'],
   ['Paramount+', 'https://www.paramountplus.com/', '#0a64ff'],
@@ -91,6 +91,13 @@ const SERVICES = [
 ];
 let note = '';
 const LOGO_INK = { Netflix: '#e50914', Plex: '#ebaf00', Hulu: '#0b0c0f' };
+// Logos supplied as images (the rest are vector paths in logos.js).
+const LOGO_IMAGES = {};
+Object.entries({ 'Disney+': './assets/logo_disneyplus.png', 'HBO Max': './assets/logo_hbomax.png' }).forEach(([name, src]) => {
+  const img = new Image();
+  img.onload = () => { LOGO_IMAGES[name] = img; panel.redraw(); };
+  img.src = src;
+});
 const logoPaths = {};
 function logoPath(name) { return logoPaths[name] || (logoPaths[name] = new Path2D(LOGOS[name].path)); }
 function openService(name) {
@@ -148,7 +155,12 @@ panel.setPainter((ui) => {
         g.arc(tx + tw / 2, ty + 108, 78, 0, Math.PI * 2);
         g.fill();
         const logo = LOGOS[name];
-        if (logo) {
+        const pic = LOGO_IMAGES[name];
+        if (pic) {
+          const fit = Math.min(108 / pic.width, 108 / pic.height);
+          const pw = pic.width * fit, ph = pic.height * fit;
+          g.drawImage(pic, tx + tw / 2 - pw / 2, ty + 108 - ph / 2, pw, ph);
+        } else if (logo) {
           const k = 86 / 24;
           g.save();
           g.translate(tx + tw / 2 - 43, ty + 108 - 43);
