@@ -1,11 +1,23 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
+import { build as buildBeach } from './rooms/beach.js';
 import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
-const ROOMS = { bullpen: buildBullpen };
+const ROOMS = { beach: buildBeach, bullpen: buildBullpen };
+// What the Rooms tab lists.
+const ROOM_CARDS = [
+  { key: 'beach', title: 'Kauai Sunset', subtitle: 'A beach house at dusk', thumb: './assets/beach_thumb.jpg' },
+  { key: 'bullpen', title: 'The Office', subtitle: 'The bullpen', thumb: './assets/bullpen_thumb.jpg' },
+];
 const params = new URLSearchParams(location.search);
-const roomKey = ROOMS[params.get('room')] ? params.get('room') : 'bullpen';
+// The room in the address wins; otherwise the one chosen last time.
+function savedRoom() { try { return localStorage.getItem('room'); } catch { return null; } }
+const roomKey = ROOMS[params.get('room')] ? params.get('room') : (ROOMS[savedRoom()] ? savedRoom() : 'beach');
+function switchRoom(key) {
+  try { localStorage.setItem('room', key); } catch { /* private browsing: the address still carries it */ }
+  location.search = `?room=${key}`;
+}
 
 const statusEl = document.getElementById('status');
 const enterBtn = document.getElementById('enter');
@@ -26,7 +38,7 @@ renderer.xr.setFoveation(0);
 document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 60);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1500);
 camera.rotation.order = 'YXZ';
 
 // ----- the room, with loading and failure states -----
@@ -135,7 +147,7 @@ SERVICES.forEach((s) => {
   if (path) logoPaths[s.name] = new Path2D(path.path);
   if (s.image) loadImage(s.name, s.image);
 });
-loadImage('room:bullpen', './assets/bullpen_thumb.jpg');
+ROOM_CARDS.forEach((r) => loadImage(`room:${r.key}`, r.thumb));
 
 function openService(service) {
   const win = window.open(service.url, '_blank');
@@ -217,27 +229,31 @@ panel.setPainter((ui) => {
       ui.region(tx, ty, tw, th, 28, () => openService(s));
     });
   } else if (tab === 'rooms') {
-    // Only rooms that exist are listed.
-    const tw = 560, th = 315, ty = top;
-    const pic = images[`room:${room.key}`];
-    g.save();
-    ui.roundRect(cx, ty, tw, th, 28);
-    g.clip();
-    if (pic) {
-      const k = Math.max(tw / pic.width, th / pic.height);
-      g.drawImage(pic, cx + tw / 2 - pic.width * k / 2, ty + th / 2 - pic.height * k / 2, pic.width * k, pic.height * k);
-    } else {
-      g.fillStyle = '#2a2c31';
-      g.fillRect(cx, ty, tw, th);
-    }
-    g.restore();
-    g.strokeStyle = '#f2efe8';
-    g.lineWidth = 4;
-    ui.roundRect(cx + 2, ty + 2, tw - 4, th - 4, 28);
-    g.stroke();
-    ui.text(room.name, cx, ty + th + 44, 40, L.ink, 700, 'left');
-    ui.text(`${room.subtitle}  ·  Current room`, cx, ty + th + 92, L.small, L.dimInk, 400, 'left');
-    ui.text('More rooms will appear here as they are built.', cx + tw + 56, ty + th / 2, L.small, L.dimInk, 400, 'left');
+    ui.text('Choosing another room reloads the page', cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
+    const tw = 560, th = 315, ty = top, gap = 56;
+    ROOM_CARDS.forEach((card, i) => {
+      const tx = cx + i * (tw + gap);
+      const current = card.key === room.key;
+      const pic = images[`room:${card.key}`];
+      g.save();
+      ui.roundRect(tx, ty, tw, th, 28);
+      g.clip();
+      if (pic) {
+        const k = Math.max(tw / pic.width, th / pic.height);
+        g.drawImage(pic, tx + tw / 2 - pic.width * k / 2, ty + th / 2 - pic.height * k / 2, pic.width * k, pic.height * k);
+      } else {
+        g.fillStyle = '#2a2c31';
+        g.fillRect(tx, ty, tw, th);
+      }
+      g.restore();
+      g.strokeStyle = current ? '#f2efe8' : 'rgba(255,255,255,0.14)';
+      g.lineWidth = current ? 4 : 2;
+      ui.roundRect(tx + 2, ty + 2, tw - 4, th - 4, 28);
+      g.stroke();
+      ui.text(card.title, tx, ty + th + 44, 40, L.ink, 700, 'left');
+      ui.text(current ? `${card.subtitle}  ·  Current room` : card.subtitle, tx, ty + th + 92, L.small, L.dimInk, 400, 'left');
+      if (!current) ui.region(tx, ty, tw, th, 28, () => switchRoom(card.key));
+    });
   } else {
     ui.text(room.name, cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
     // Lighting: a real slider. Click anywhere on the track, or hold and drag.
@@ -335,6 +351,7 @@ enterBtn.addEventListener('click', async () => {
 setupXR();
 
 // ----- frame loop -----
+const _eye = new THREE.Vector3();
 let last = performance.now();
 renderer.setAnimationLoop((now) => {
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -349,6 +366,7 @@ renderer.setAnimationLoop((now) => {
   if (roomReady && reveal < 1) { reveal = Math.min(1, reveal + dt / 0.6); room.setReveal(reveal); }
   panel.setDim(0.6 + 0.4 * Math.min(1, level / 0.3));
 
+  if (room.update) room.update(dt, presenting ? renderer.xr.getCamera().getWorldPosition(_eye) : camera.position);
   panel.update(dt, presenting);
   renderer.render(scene, camera);
 });
