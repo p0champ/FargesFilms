@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Farges Films</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0b0c; color: #f2efe8; font-family: Georgia, 'Times New Roman', serif; overflow: hidden; }
+    #stage, #stage canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+    #panel { position: fixed; left: 24px; bottom: 24px; max-width: 420px; padding: 20px 22px; background: rgba(12, 12, 13, 0.78); border: 1px solid rgba(242, 239, 232, 0.16); border-radius: 10px; backdrop-filter: blur(8px); }
+    #panel small { letter-spacing: 0.18em; text-transform: uppercase; font-family: Helvetica, Arial, sans-serif; font-size: 11px; opacity: 0.6; }
+    h1 { margin: 6px 0 10px; font-size: 26px; font-weight: normal; }
+    p { margin: 0 0 14px; font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; opacity: 0.82; }
+    button { font: 600 15px Helvetica, Arial, sans-serif; padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(242, 239, 232, 0.4); background: transparent; color: inherit; cursor: pointer; margin-right: 8px; }
+    button#enter { background: #f2efe8; color: #0b0b0c; border-color: #f2efe8; }
+    #status { margin: 12px 0 0; font-size: 12px; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="panel">
+    <small>Farges Films</small>
+    <h1 id="room-name">&nbsp;</h1>
+    <p>Enter the room, then open your film in a browser window and place it over the black screen on the far wall. Point at the light switch on the right-hand wall and pull the trigger to bring the lights down.</p>
+    <button id="enter" hidden>Enter VR</button>
+    <button id="lights">Lights down</button>
+    <p id="status">Loading…</p>
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
