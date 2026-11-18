@@ -13,6 +13,7 @@
     p { margin: 0 0 14px; font-family: Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; opacity: 0.82; }
     button { font: 600 15px Helvetica, Arial, sans-serif; padding: 12px 20px; border-radius: 8px; border: 1px solid rgba(242, 239, 232, 0.4); background: transparent; color: inherit; cursor: pointer; margin-right: 8px; }
     button#enter { background: #f2efe8; color: #0b0b0c; border-color: #f2efe8; }
+    .row { margin-bottom: 8px; }
     #status { margin: 12px 0 0; font-size: 12px; opacity: 0.6; }
   </style>
 </head>
@@ -21,9 +22,15 @@
   <div id="panel">
     <small>Farges Films</small>
     <h1 id="room-name">&nbsp;</h1>
-    <p>Enter the room, then open your film in a browser window and place it over the black screen on the far wall. Point at the light switch on the right-hand wall and pull the trigger to bring the lights down.</p>
-    <button id="enter" hidden>Enter VR</button>
-    <button id="lights">Lights down</button>
+    <p>Enter the room, then point at the floating panel and pull the trigger: dim the lights, or open Netflix or Disney+ in a browser window and place it where you like. Squeeze the grip to hide the panel.</p>
+    <div class="row">
+      <button id="enter" hidden>Enter VR</button>
+      <button id="lights">Lights down</button>
+    </div>
+    <div class="row">
+      <button data-service="Netflix">Netflix</button>
+      <button data-service="Disney+">Disney+</button>
+    </div>
     <p id="status">Loading…</p>
   </div>
   <script type="module" src="./main.js"></script>
