@@ -181,7 +181,7 @@ M = dict(
     water=mat('water', '#bcd7e8', 0.1),
     sign=mat('sign', '#16171a', 0.4),
     sign_text=mat('sign_text', '#f2f2ee', 0.5),
-    lens=emit_mat('lens', '#f4f6ff', 20.0),
+    lens=emit_mat('lens', '#f4f6ff', 20.0 if MODE != 'bake' else 10.0),
     day=emit_mat('day', '#dfeaff', 9.0),
     exit=emit_mat('exit', '#ff3b2a', 3.0),
     vend=emit_mat('vend', '#ffd9a0', 2.5),
@@ -854,6 +854,140 @@ for yy in (-0.95, 0, 0.95):
     chair(ct, (-0.95, yy, 0), -math.pi / 2 + rnd.uniform(-.3, .3))
     chair(ct, (0.95, yy, 0), math.pi / 2 + rnd.uniform(-.3, .3))
 box((1.8, 0.03, 1.1), (4.9, YP - 0.08, 1.5), M['white'], bevel=0.004)
+
+# -------------------------------------------------------------------- bake
+# 'bake' mode: instead of a picture, produce a real 3D model of the room with
+# the lighting painted onto its surfaces, for the headset to draw in real time.
+#   python3 office_bullpen.py bake <output_dir> [atlas_size] [samples]
+def bake_and_export():
+    import os
+    os.makedirs(OUT, exist_ok=True)
+    world = bpy.data.worlds.new('w')
+    world.use_nodes = True
+    world.node_tree.nodes['Background'].inputs[0].default_value = (0.02, 0.02, 0.022, 1)
+    scene.world = world
+    scene.render.engine = 'CYCLES'
+    cy = scene.cycles
+    cy.device = 'CPU'
+    cy.samples = SAMPLES
+    cy.use_adaptive_sampling = False
+    cy.use_denoising = True
+    cy.max_bounces = 8
+    cy.diffuse_bounces = 5
+    cy.sample_clamp_indirect = 8
+    cy.caustics_reflective = False
+    cy.caustics_refractive = False
+    scene.view_settings.view_transform = 'Standard'
+
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    # Convert text to meshes first.
+    for ob in [o for o in col.objects if o.type == 'FONT']:
+        me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+        nob = bpy.data.objects.new('txtmesh', me)
+        nob.matrix_world = ob.matrix_world.copy()
+        col.objects.link(nob)
+        bpy.data.objects.remove(ob)
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+
+    # Sort every object into one of three groups by size and distance from the seat.
+    groups = {'near': [], 'far': [], 'shell': []}
+    for ob in col.objects:
+        if ob.type != 'MESH':
+            continue
+        bb = [ob.matrix_world @ Vector(c) for c in ob.bound_box]
+        lo = Vector((min(v.x for v in bb), min(v.y for v in bb), min(v.z for v in bb)))
+        hi = Vector((max(v.x for v in bb), max(v.y for v in bb), max(v.z for v in bb)))
+        size = hi - lo
+        centre = (lo + hi) / 2
+        if max(size.x, size.y) > 3.0:
+            groups['shell'].append(ob)
+        elif math.hypot(centre.x, centre.y) < 2.4:
+            groups['near'].append(ob)
+        else:
+            groups['far'].append(ob)
+
+    merged = {}
+    for gname, obs in groups.items():
+        bm = bmesh.new()
+        mats = []
+        for ob in obs:
+            pass
+        bpy.context.view_layer.update()
+        dg = bpy.context.evaluated_depsgraph_get()
+        for ob in obs:
+            me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+            me.transform(ob.matrix_world)
+            m_ = ob.data.materials[0] if ob.data.materials else M['white']
+            if m_ not in mats:
+                mats.append(m_)
+            n0 = len(bm.faces)
+            bm.from_mesh(me)
+            bm.faces.ensure_lookup_table()
+            mi = mats.index(m_)
+            for f in bm.faces[n0:]:
+                f.material_index = mi
+            bpy.data.meshes.remove(me)
+        bmesh.ops.triangulate(bm, faces=bm.faces[:])
+        me = bpy.data.meshes.new('room_' + gname)
+        bm.to_mesh(me)
+        bm.free()
+        ob = bpy.data.objects.new('room_' + gname, me)
+        for m_ in mats:
+            me.materials.append(m_)
+        merged[gname] = ob
+        print('GROUP', gname, 'objects', len(obs), 'triangles', len(me.polygons), 'materials', len(mats))
+    for ob in list(col.objects):
+        if ob.type == 'MESH':
+            bpy.data.objects.remove(ob)
+    for ob in merged.values():
+        col.objects.link(ob)
+
+    # Unwrap each group onto its own texture sheet.
+    for gname, ob in merged.items():
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.uv.smart_project(angle_limit=math.radians(50), island_margin=0.0, area_weight=0.0)
+        bpy.ops.uv.pack_islands(margin=0.0015)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        print('UNWRAPPED', gname)
+
+    # Bake colour and lighting together, one group at a time.
+    for gname, ob in merged.items():
+        img = bpy.data.images.new('bake_' + gname, WIDTH, WIDTH, alpha=False)
+        for m_ in ob.data.materials:
+            nt = m_.node_tree
+            node = nt.nodes.get('BAKE_TARGET') or nt.nodes.new('ShaderNodeTexImage')
+            node.name = 'BAKE_TARGET'
+            node.image = img
+            for n_ in nt.nodes:
+                n_.select = False
+            node.select = True
+            nt.nodes.active = node
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.bake(type='COMBINED', margin=6, use_clear=True)
+        img.filepath_raw = os.path.join(OUT, f'bullpen_{gname}.png')
+        img.file_format = 'PNG'
+        img.save()
+        print('BAKED', gname)
+
+    # Export the geometry (positions and texture coordinates only).
+    for ob in merged.values():
+        ob.data.materials.clear()
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, 'bullpen.glb'), export_format='GLB', use_selection=True,
+                              export_materials='NONE', export_normals=False, export_apply=False, export_yup=True)
+    print('RENDERED', OUT)
+
+if MODE == 'bake':
+    bake_and_export()
+    sys.exit(0)
 
 # ------------------------------------------------------------------ render
 world = bpy.data.worlds.new('w')
