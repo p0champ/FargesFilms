@@ -68,8 +68,8 @@ export function build(renderer, { onProgress, onReady, onError } = {}) {
 
   return {
     key: 'bullpen',
-    name: 'The Office',
-    subtitle: 'The bullpen',
+    name: 'Dunder Mifflin',
+    subtitle: 'The Office',
     root,
     background: new THREE.Color('#000000'),
     setLightLevel(k) { level = k; paint(); },

@@ -8,7 +8,7 @@ const ROOMS = { soul: buildSoul, bullpen: buildBullpen };
 // What the Rooms tab lists.
 const ROOM_CARDS = [
   { key: 'soul', title: 'The You Seminar', subtitle: 'Soul', thumb: './assets/soul_thumb.jpg' },
-  { key: 'bullpen', title: 'The Office', subtitle: 'The bullpen', thumb: './assets/bullpen_thumb.jpg' },
+  { key: 'bullpen', title: 'Dunder Mifflin', subtitle: 'The Office', thumb: './assets/bullpen_thumb.jpg' },
 ];
 const params = new URLSearchParams(location.search);
 // The room in the address wins; otherwise the one chosen last time.

@@ -5,7 +5,7 @@ Rooms to watch films in, for Meta Quest 3. A static web app: open it in the Ques
 ## Rooms
 
 - **The You Seminar** (`rooms/soul.js`) — the pastel hills from Soul. The far landscape is a 360-degree backdrop made from one wide still by `studio/make_pano.py`; the ground, mounds, trees and drifting lights near the seat are real 3D.
-- **The Office** (`rooms/bullpen.js`) — the bullpen, modelled and lit in Blender by `studio/office_bullpen.py`. To be revisited.
+- **Dunder Mifflin** (`rooms/bullpen.js`) — the bullpen from The Office, modelled and lit in Blender by `studio/office_bullpen.py`. To be revisited.
 
 ## Controls
 
