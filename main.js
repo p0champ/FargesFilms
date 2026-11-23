@@ -1,19 +1,21 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
 import { build as buildBeach } from './rooms/beach.js';
+import { build as buildSoul } from './rooms/soul.js';
 import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
-const ROOMS = { beach: buildBeach, bullpen: buildBullpen };
+const ROOMS = { soul: buildSoul, beach: buildBeach, bullpen: buildBullpen };
 // What the Rooms tab lists.
 const ROOM_CARDS = [
+  { key: 'soul', title: 'The Hills', subtitle: 'Pastel hills at first light', thumb: './assets/soul_thumb.jpg' },
   { key: 'beach', title: 'Kauai Sunset', subtitle: 'A beach house at dusk', thumb: './assets/beach_thumb.jpg' },
   { key: 'bullpen', title: 'The Office', subtitle: 'The bullpen', thumb: './assets/bullpen_thumb.jpg' },
 ];
 const params = new URLSearchParams(location.search);
 // The room in the address wins; otherwise the one chosen last time.
 function savedRoom() { try { return localStorage.getItem('room'); } catch { return null; } }
-const roomKey = ROOMS[params.get('room')] ? params.get('room') : (ROOMS[savedRoom()] ? savedRoom() : 'beach');
+const roomKey = ROOMS[params.get('room')] ? params.get('room') : (ROOMS[savedRoom()] ? savedRoom() : 'soul');
 function switchRoom(key) {
   try { localStorage.setItem('room', key); } catch { /* private browsing: the address still carries it */ }
   location.search = `?room=${key}`;
@@ -230,7 +232,7 @@ panel.setPainter((ui) => {
     });
   } else if (tab === 'rooms') {
     ui.text('Choosing another room reloads the page', cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
-    const tw = 560, th = 315, ty = top, gap = 56;
+    const gap = 40, tw = Math.min(560, (cw - gap * (ROOM_CARDS.length - 1)) / ROOM_CARDS.length), th = Math.round(tw * 9 / 16), ty = top;
     ROOM_CARDS.forEach((card, i) => {
       const tx = cx + i * (tw + gap);
       const current = card.key === room.key;
@@ -250,8 +252,9 @@ panel.setPainter((ui) => {
       g.lineWidth = current ? 4 : 2;
       ui.roundRect(tx + 2, ty + 2, tw - 4, th - 4, 28);
       g.stroke();
-      ui.text(card.title, tx, ty + th + 44, 40, L.ink, 700, 'left');
-      ui.text(current ? `${card.subtitle}  ·  Current room` : card.subtitle, tx, ty + th + 92, L.small, L.dimInk, 400, 'left');
+      ui.text(card.title, tx, ty + th + 44, 38, L.ink, 700, 'left');
+      ui.text(card.subtitle, tx, ty + th + 90, L.small, L.dimInk, 400, 'left');
+      if (current) ui.text('Current room', tx, ty + th + 134, L.small, L.ink, 600, 'left');
       if (!current) ui.region(tx, ty, tw, th, 28, () => switchRoom(card.key));
     });
   } else {
