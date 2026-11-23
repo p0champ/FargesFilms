@@ -1,15 +1,13 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
-import { build as buildBeach } from './rooms/beach.js';
 import { build as buildSoul } from './rooms/soul.js';
 import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
-const ROOMS = { soul: buildSoul, beach: buildBeach, bullpen: buildBullpen };
+const ROOMS = { soul: buildSoul, bullpen: buildBullpen };
 // What the Rooms tab lists.
 const ROOM_CARDS = [
-  { key: 'soul', title: 'The Hills', subtitle: 'Pastel hills at first light', thumb: './assets/soul_thumb.jpg' },
-  { key: 'beach', title: 'Kauai Sunset', subtitle: 'A beach house at dusk', thumb: './assets/beach_thumb.jpg' },
+  { key: 'soul', title: 'The You Seminar', subtitle: 'Soul', thumb: './assets/soul_thumb.jpg' },
   { key: 'bullpen', title: 'The Office', subtitle: 'The bullpen', thumb: './assets/bullpen_thumb.jpg' },
 ];
 const params = new URLSearchParams(location.search);

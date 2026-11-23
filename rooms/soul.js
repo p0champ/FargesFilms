@@ -1,4 +1,4 @@
-// The Hills — the soft pastel hills of a dreamlike "great before".
+// The You Seminar — the soft pastel hills from Pixar's Soul.
 // The far landscape is a 360-degree backdrop made from a single wide film
 // still (studio/make_pano.py); because everything in it is far away, it sits
 // on a very large sphere and stays put as you move your head. Around the seat
@@ -192,8 +192,8 @@ export function build(renderer, { onProgress, onReady, onError } = {}) {
 
   return {
     key: 'soul',
-    name: 'The Hills',
-    subtitle: 'Pastel hills at first light',
+    name: 'The You Seminar',
+    subtitle: 'Soul',
     root,
     background: new THREE.Color('#000000'),
     setLightLevel(k) { level = k; paint(); },

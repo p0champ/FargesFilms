@@ -4,9 +4,8 @@ Rooms to watch films in, for Meta Quest 3. A static web app: open it in the Ques
 
 ## Rooms
 
-- **The Office** (`rooms/bullpen.js`) — the bullpen, seen from a desk in the middle of the room.
-
-A room is modelled and lit in Blender by a script in `studio/`, which paints the finished lighting onto the surfaces and exports a 3D model plus texture sheets into `assets/`. The app draws that model in real time.
+- **The You Seminar** (`rooms/soul.js`) — the pastel hills from Soul. The far landscape is a 360-degree backdrop made from one wide still by `studio/make_pano.py`; the ground, mounds, trees and drifting lights near the seat are real 3D.
+- **The Office** (`rooms/bullpen.js`) — the bullpen, modelled and lit in Blender by `studio/office_bullpen.py`. To be revisited.
 
 ## Controls
 
@@ -17,6 +16,6 @@ A room is modelled and lit in Blender by a script in `studio/`, which paints the
 
 Serve the folder with any static file server, for example `python3 -m http.server`, and open the address it prints. There is no build step. three.js is vendored in `vendor/` and the Inter typeface in `fonts/`.
 
-## Rebuilding a room
+## Making a room from a still
 
-`python3 studio/office_bullpen.py bake <output_dir> 4096 32` (needs `pip install bpy`) writes `bullpen.glb` and three PNG texture sheets; convert the sheets to JPEG and copy everything into `assets/`. `preview` mode renders a still for checking the model.
+`python3 studio/make_pano.py <wide_still.png> assets/<name>_pano` (needs `opencv-python-headless`) writes `<name>_pano_8k.jpg` and `_4k.jpg`. The still should be a wide, character-free landscape; it is mirrored four times around the horizon and its sky and ground are extended. Copy `rooms/soul.js` as a starting point for the room.
