@@ -4,8 +4,21 @@ Rooms to watch films in, for Meta Quest 3. A static web app: open it in the Ques
 
 ## Rooms
 
-- **The You Seminar** (`rooms/soul.js`) — the pastel hills from Soul. The far landscape is a 360-degree backdrop made from one wide still by `studio/make_pano.py`; the ground, mounds, trees and drifting lights near the seat are real 3D.
-- **Dunder Mifflin** (`rooms/bullpen.js`) — the bullpen from The Office, modelled and lit in Blender by `studio/office_bullpen.py`. To be revisited.
+Made from one wide film still each (`rooms/backdrop.js`, or `rooms/soul.js` for the first): the far scenery is a 360-degree backdrop built by `studio/make_pano.py`, with a small patch of real 3D ground under the seat.
+
+- **The You Seminar** — Soul
+- **The Shire**, **Rivendell** — The Lord of the Rings
+- **Tatooine**, **Endor**, **Dagobah** — Star Wars
+- **The Dawn of Man** — 2001: A Space Odyssey
+
+Drawn entirely live (`rooms/space.js`):
+
+- **The Great Beyond** — Soul: a moving walkway rising through stars toward a white light
+- **Earth Orbit** — 2001: a deck above the Earth with a wheel station turning in the distance
+
+Modelled and lit in Blender (`rooms/bullpen.js`, `studio/office_bullpen.py`):
+
+- **Dunder Mifflin** — The Office. To be revisited.
 
 ## Controls
 
@@ -18,4 +31,6 @@ Serve the folder with any static file server, for example `python3 -m http.serve
 
 ## Making a room from a still
 
-`python3 studio/make_pano.py <wide_still.png> assets/<name>_pano` (needs `opencv-python-headless`) writes `<name>_pano_8k.jpg` and `_4k.jpg`. The still should be a wide, character-free landscape; it is mirrored four times around the horizon and its sky and ground are extended. Copy `rooms/soul.js` as a starting point for the room.
+`python3 studio/make_pano.py <wide_still.png> assets/<name>_pano [horizon] [options]` (needs `opencv-python-headless`) writes `<name>_pano_8k.jpg` and `_4k.jpg` and prints ground colours sampled from the still. See the top of the script for the options. Then add an entry to `STILL_ROOMS` and `ROOM_CARDS` in `main.js`, and a 640x360 `assets/<name>_thumb.jpg`.
+
+Open landscapes work best. Anything close to the camera (tree trunks, cliffs) shows the mirroring where the copies of the still meet.

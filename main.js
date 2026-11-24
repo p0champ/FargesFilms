@@ -1,14 +1,31 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
 import { build as buildSoul } from './rooms/soul.js';
+import { makeBackdropRoom } from './rooms/backdrop.js';
+import { buildBeyond, buildOrbit } from './rooms/space.js';
 import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
-const ROOMS = { soul: buildSoul, bullpen: buildBullpen };
-// What the Rooms tab lists.
+// Rooms made from one film still each: colours for the ground under the seat
+// are sampled from the still by studio/make_pano.py.
+const STILL_ROOMS = [
+  { key: 'shire', name: 'The Shire', subtitle: 'The Lord of the Rings', pano: 'shire_pano', ground: ['#516201', '#7c8f17', '#a5b92b'], grain: 0.6, motes: '#fff6c0' },
+  { key: 'rivendell', name: 'Rivendell', subtitle: 'The Lord of the Rings', pano: 'rivendell_pano', ground: ['#171a18', '#343835', '#505855'], grain: 0.4, motes: '#dfe8ff' },
+  { key: 'tatooine', name: 'Tatooine', subtitle: 'Star Wars', pano: 'tatooine_pano', ground: ['#250000', '#2a0200', '#3a0603'], grain: 0.5, rise: 1.0, night: [0.16, 0.08, 0.10] },
+  { key: 'endor', name: 'Endor', subtitle: 'Star Wars', pano: 'endor_pano', ground: ['#172213', '#283626', '#394d38'], grain: 0.6, rise: 0.8, motes: '#eaffd0' },
+  { key: 'dagobah', name: 'Dagobah', subtitle: 'Star Wars', pano: 'dagobah_pano', ground: ['#020306', '#0b0b0f', '#16161a'], grain: 0.4, rise: 0.6, motes: '#9fc4d8' },
+  { key: 'dawn', name: 'The Dawn of Man', subtitle: '2001: A Space Odyssey', pano: 'dawn_pano', ground: ['#3a2218', '#714732', '#b06e48'], grain: 0.7, rise: 2.4 },
+];
+const ROOMS = { soul: buildSoul, beyond: buildBeyond, bullpen: buildBullpen, orbit: buildOrbit };
+STILL_ROOMS.forEach((r) => { ROOMS[r.key] = makeBackdropRoom(r); });
+// What the Rooms tab lists, in order.
+const card = (key, title, subtitle) => ({ key, title, subtitle, thumb: `./assets/${key}_thumb.jpg` });
 const ROOM_CARDS = [
-  { key: 'soul', title: 'The You Seminar', subtitle: 'Soul', thumb: './assets/soul_thumb.jpg' },
-  { key: 'bullpen', title: 'Dunder Mifflin', subtitle: 'The Office', thumb: './assets/bullpen_thumb.jpg' },
+  card('soul', 'The You Seminar', 'Soul'), card('beyond', 'The Great Beyond', 'Soul'),
+  card('shire', 'The Shire', 'The Lord of the Rings'), card('rivendell', 'Rivendell', 'The Lord of the Rings'),
+  card('tatooine', 'Tatooine', 'Star Wars'), card('endor', 'Endor', 'Star Wars'), card('dagobah', 'Dagobah', 'Star Wars'),
+  card('dawn', 'The Dawn of Man', '2001'), card('orbit', 'Earth Orbit', '2001'),
+  card('bullpen', 'Dunder Mifflin', 'The Office'),
 ];
 const params = new URLSearchParams(location.search);
 // The room in the address wins; otherwise the one chosen last time.
@@ -230,13 +247,13 @@ panel.setPainter((ui) => {
     });
   } else if (tab === 'rooms') {
     ui.text('Choosing another room reloads the page', cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
-    const gap = 40, tw = Math.min(560, (cw - gap * (ROOM_CARDS.length - 1)) / ROOM_CARDS.length), th = Math.round(tw * 9 / 16), ty = top;
+    const cols = 5, gap = 28, tw = (cw - gap * (cols - 1)) / cols, th = Math.round(tw * 9 / 16), rowH = th + 96;
     ROOM_CARDS.forEach((card, i) => {
-      const tx = cx + i * (tw + gap);
+      const tx = cx + (i % cols) * (tw + gap), ty = top - 8 + Math.floor(i / cols) * rowH;
       const current = card.key === room.key;
       const pic = images[`room:${card.key}`];
       g.save();
-      ui.roundRect(tx, ty, tw, th, 28);
+      ui.roundRect(tx, ty, tw, th, 22);
       g.clip();
       if (pic) {
         const k = Math.max(tw / pic.width, th / pic.height);
@@ -247,13 +264,12 @@ panel.setPainter((ui) => {
       }
       g.restore();
       g.strokeStyle = current ? '#f2efe8' : 'rgba(255,255,255,0.14)';
-      g.lineWidth = current ? 4 : 2;
-      ui.roundRect(tx + 2, ty + 2, tw - 4, th - 4, 28);
+      g.lineWidth = current ? 5 : 2;
+      ui.roundRect(tx + 2, ty + 2, tw - 4, th - 4, 22);
       g.stroke();
-      ui.text(card.title, tx, ty + th + 44, 38, L.ink, 700, 'left');
-      ui.text(card.subtitle, tx, ty + th + 90, L.small, L.dimInk, 400, 'left');
-      if (current) ui.text('Current room', tx, ty + th + 134, L.small, L.ink, 600, 'left');
-      if (!current) ui.region(tx, ty, tw, th, 28, () => switchRoom(card.key));
+      ui.text(card.title, tx + 2, ty + th + 30, 26, L.ink, 700, 'left');
+      ui.text(current ? 'You are here' : card.subtitle, tx + 2, ty + th + 64, 22, current ? L.ink : L.dimInk, current ? 600 : 400, 'left');
+      if (!current) ui.region(tx, ty, tw, th, 22, () => switchRoom(card.key));
     });
   } else {
     ui.text(room.name, cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
