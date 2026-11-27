@@ -1,30 +1,14 @@
 import * as THREE from './vendor/three.module.js';
 import { build as buildBullpen } from './rooms/bullpen.js';
 import { build as buildSoul } from './rooms/soul.js';
-import { makeBackdropRoom } from './rooms/backdrop.js';
-import { buildBeyond, buildOrbit } from './rooms/space.js';
 import { createPanel, PANEL_W, PANEL_H, FONT } from './panel.js';
 import { LOGOS } from './logos.js';
 
-// Rooms made from one film still each: colours for the ground under the seat
-// are sampled from the still by studio/make_pano.py.
-const STILL_ROOMS = [
-  { key: 'shire', name: 'The Shire', subtitle: 'The Lord of the Rings', pano: 'shire_pano', ground: ['#516201', '#7c8f17', '#a5b92b'], grain: 0.6, motes: '#fff6c0' },
-  { key: 'rivendell', name: 'Rivendell', subtitle: 'The Lord of the Rings', pano: 'rivendell_pano', ground: ['#171a18', '#343835', '#505855'], grain: 0.4, motes: '#dfe8ff' },
-  { key: 'tatooine', name: 'Tatooine', subtitle: 'Star Wars', pano: 'tatooine_pano', ground: ['#250000', '#2a0200', '#3a0603'], grain: 0.5, rise: 1.0, night: [0.16, 0.08, 0.10] },
-  { key: 'endor', name: 'Endor', subtitle: 'Star Wars', pano: 'endor_pano', ground: ['#172213', '#283626', '#394d38'], grain: 0.6, rise: 0.8, motes: '#eaffd0' },
-  { key: 'dagobah', name: 'Dagobah', subtitle: 'Star Wars', pano: 'dagobah_pano', ground: ['#020306', '#0b0b0f', '#16161a'], grain: 0.4, rise: 0.6, motes: '#9fc4d8' },
-  { key: 'dawn', name: 'The Dawn of Man', subtitle: '2001: A Space Odyssey', pano: 'dawn_pano', ground: ['#3a2218', '#714732', '#b06e48'], grain: 0.7, rise: 2.4 },
-];
-const ROOMS = { soul: buildSoul, beyond: buildBeyond, bullpen: buildBullpen, orbit: buildOrbit };
-STILL_ROOMS.forEach((r) => { ROOMS[r.key] = makeBackdropRoom(r); });
+const ROOMS = { soul: buildSoul, bullpen: buildBullpen };
 // What the Rooms tab lists, in order.
 const card = (key, title, subtitle) => ({ key, title, subtitle, thumb: `./assets/${key}_thumb.jpg` });
 const ROOM_CARDS = [
-  card('soul', 'The You Seminar', 'Soul'), card('beyond', 'The Great Beyond', 'Soul'),
-  card('shire', 'The Shire', 'The Lord of the Rings'), card('rivendell', 'Rivendell', 'The Lord of the Rings'),
-  card('tatooine', 'Tatooine', 'Star Wars'), card('endor', 'Endor', 'Star Wars'), card('dagobah', 'Dagobah', 'Star Wars'),
-  card('dawn', 'The Dawn of Man', '2001'), card('orbit', 'Earth Orbit', '2001'),
+  card('soul', 'The You Seminar', 'Soul'),
   card('bullpen', 'Dunder Mifflin', 'The Office'),
 ];
 const params = new URLSearchParams(location.search);
@@ -247,7 +231,7 @@ panel.setPainter((ui) => {
     });
   } else if (tab === 'rooms') {
     ui.text('Choosing another room reloads the page', cx + cw, titleY + 4, L.small, L.dimInk, 400, 'right');
-    const cols = 5, gap = 28, tw = (cw - gap * (cols - 1)) / cols, th = Math.round(tw * 9 / 16), rowH = th + 96;
+    const cols = Math.max(3, Math.min(5, ROOM_CARDS.length)), gap = 28, tw = (cw - gap * (cols - 1)) / cols, th = Math.round(tw * 9 / 16), rowH = th + 96;
     ROOM_CARDS.forEach((card, i) => {
       const tx = cx + (i % cols) * (tw + gap), ty = top - 8 + Math.floor(i / cols) * rowH;
       const current = card.key === room.key;
